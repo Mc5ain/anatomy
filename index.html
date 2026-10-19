@@ -55,6 +55,18 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         
         .tooltip { position: fixed; background: rgba(0,0,0,0.9); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; pointer-events: none; z-index: 100; display: none; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        #info-panel { position: fixed; left: 14px; bottom: 14px; width: 330px; max-width: calc(100vw - 28px);
+            background: rgba(18,18,22,0.95); border: 1px solid #3f3f46; border-radius: 12px;
+            padding: 14px 16px; color: #e4e4e7; font-size: 13px; line-height: 1.65;
+            display: none; z-index: 60; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+        #info-panel.on { display: block; }
+        #info-panel .ip-close { position: absolute; top: 6px; right: 10px; cursor: pointer; color: #71717a; font-size: 16px; }
+        #info-panel .ip-name { font-size: 16px; font-weight: 700; margin-bottom: 2px; padding-right: 18px; }
+        #info-panel .ip-en { font-size: 11px; color: #a1a1aa; margin-bottom: 8px; }
+        #info-panel .ip-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        #info-panel .ip-tag { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: #27272a; color: #d4d4d8; }
+        #info-panel .ip-note { color: #d4d4d8; font-size: 12.5px; }
+        @media (max-width: 768px) { #info-panel { left: 8px; right: 8px; width: auto; bottom: calc(72px + env(safe-area-inset-bottom)); } }
         
         /* 进度条样式 */
         .global-progress { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: rgba(59, 130, 246, 0.1); z-index: 2000; display: none; overflow: hidden; }
@@ -263,6 +275,14 @@
 
     <div id="canvas-container"></div>
     <div id="tooltip" class="tooltip"></div>
+
+    <div id="info-panel">
+        <div class="ip-close" onclick="document.getElementById('info-panel').classList.remove('on')">×</div>
+        <div class="ip-name" id="ip-name"></div>
+        <div class="ip-en" id="ip-en"></div>
+        <div class="ip-meta" id="ip-meta"></div>
+        <div class="ip-note" id="ip-note"></div>
+    </div>
     
     <!-- 全局加载进度 -->
     <div id="global-progress" class="global-progress"><div id="progress-bar" class="progress-bar"></div></div>
@@ -624,9 +644,10 @@
                 console.error('Data load failed:', e); 
                 return; 
             }
+            await loadNotes();
             
             initUI(); init3D(); setupInteraction(); 
-            // 默认只加载骨骼（40 MB）；肌肉 169 MB，点图层时再加载
+            // 默认只加载骨骼（压缩后 1.4 MB）；其他系统点击图层时再加载
             layerSystem.loadSystem('skeletal');
             
             updateModelList();
@@ -928,7 +949,57 @@
                 layerSystem.focusOnModel(m.id, currentSystem);
             }
         }
+        let AnatomyNotes = [];
+        async function loadNotes() {
+            try {
+                const res = await fetch('data/anatomy_notes.json');
+                AnatomyNotes = (await res.json()).families || [];
+            } catch (e) { console.warn('解析数据加载失败', e); }
+        }
+        function analyzeName(cn, en) {
+            const side = /左/.test(cn) ? '左侧' : (/右/.test(cn) ? '右侧' : '正中/双侧');
+            let type = '结构';
+            if (/肌/.test(cn) || /muscle/i.test(en)) type = '肌';
+            else if (/韧带/.test(cn) || /ligament/i.test(en)) type = '韧带';
+            else if (/肌腱/.test(cn) || /tendon/i.test(en)) type = '肌腱';
+            else if (/动脉/.test(cn) || /artery/i.test(en)) type = '动脉';
+            else if (/静脉/.test(cn) || /vein/i.test(en)) type = '静脉';
+            else if (/神经/.test(cn) || /nerve/i.test(en)) type = '神经';
+            else if (/骨|软骨/.test(cn) || /bone|fossa|tubercle|condyle|process/i.test(en)) type = '骨';
+            const regions = [
+                ['头面部', /头|颅|面|颌|眼|耳|鼻|口|牙/],
+                ['颈部', /颈/],
+                ['胸部', /胸|肋|乳|肺|心/],
+                ['腹部', /腹|腰/],
+                ['骨盆', /盆|髋|骶|尾/],
+                ['上肢', /肩|臂|肘|腕|手|指|锁骨|肩胛/],
+                ['下肢', /股|膝|胫|腓|踝|足|趾|跟/]
+            ];
+            let region = '躯干';
+            for (const [name, re] of regions) { if (re.test(cn)) { region = name; break; } }
+            return { side, type, region };
+        }
+        function showInfo(data) {
+            const raw = data.name || '';
+            const parts = raw.includes(' | ') ? raw.split(' | ') : [raw, ''];
+            const cn = parts[0], en = parts[1] || '';
+            const a = analyzeName(cn, en);
+            const fam = AnatomyNotes.find(f => f.match.some(k => cn.includes(k)));
+            const sysName = (SystemConfig[data.system] || {}).name || '';
+            document.getElementById('ip-name').textContent = cn;
+            document.getElementById('ip-en').textContent = en;
+            document.getElementById('ip-meta').innerHTML =
+                `<span class="ip-tag">${sysName}</span>` +
+                `<span class="ip-tag">${a.side}</span>` +
+                `<span class="ip-tag">${a.type}</span>` +
+                `<span class="ip-tag">${a.region}</span>`;
+            document.getElementById('ip-note').textContent = fam ? fam.note :
+                `该结构属于${sysName}，位于${a.region}，类型为${a.type}。旋转模型可继续观察它的形态与毗邻关系。`;
+            document.getElementById('info-panel').classList.add('on');
+        }
+
         function selectModelByData(data) { 
+            showInfo(data);
             // 如果图层未开启，先开启并同步UI
             if (!layerSystem.layerVisibility[data.system]) {
                 const layerItem = document.querySelector(`.layer-item[data-system="${data.system}"]`);
