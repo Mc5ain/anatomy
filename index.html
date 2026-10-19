@@ -992,7 +992,8 @@
             const parts = raw.includes(' | ') ? raw.split(' | ') : [raw, ''];
             const cn = parts[0], en = parts[1] || '';
             const a = analyzeName(cn, en, data.system);
-            const fam = AnatomyNotes.find(f => f.match.some(k => cn.includes(k)));
+            const fam = AnatomyNotes.find(f =>
+                (!f.system || f.system === data.system) && f.match.some(k => cn.includes(k)));
             const sysName = (SystemConfig[data.system] || {}).name || '';
             document.getElementById('ip-name').textContent = cn;
             document.getElementById('ip-en').textContent = en;
