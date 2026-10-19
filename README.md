@@ -1,3 +1,6 @@
+> **本仓库是改造版**：依赖已本地化（国内可离线打开），新增「测验模式」，模型数据来自 BodyParts3D / ISA（CC BY-SA 2.1 JP）。
+> 原项目：[jixiangying/anatomy](https://github.com/jixiangying/anatomy)。
+
 # 人体解剖学3D交互图谱 | Human Anatomy Explorer
 
 <div align="center">
