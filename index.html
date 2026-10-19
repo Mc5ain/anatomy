@@ -58,7 +58,8 @@
         #info-panel { position: fixed; left: 14px; bottom: 14px; width: 330px; max-width: calc(100vw - 28px);
             background: rgba(18,18,22,0.95); border: 1px solid #3f3f46; border-radius: 12px;
             padding: 14px 16px; color: #e4e4e7; font-size: 13px; line-height: 1.65;
-            display: none; z-index: 60; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+            display: none; z-index: 60; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            max-height: 62vh; overflow-y: auto; }
         #info-panel.on { display: block; }
         #info-panel .ip-close { position: absolute; top: 6px; right: 10px; cursor: pointer; color: #71717a; font-size: 16px; }
         #info-panel .ip-name { font-size: 16px; font-weight: 700; margin-bottom: 2px; padding-right: 18px; }
@@ -66,6 +67,8 @@
         #info-panel .ip-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
         #info-panel .ip-tag { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: #27272a; color: #d4d4d8; }
         #info-panel .ip-note { color: #d4d4d8; font-size: 12.5px; }
+        #info-panel .ip-row { margin: 7px 0; }
+        #info-panel .ip-row b { display: block; color: #a1a1aa; font-size: 11px; font-weight: 600; margin-bottom: 1px; }
         @media (max-width: 768px) { #info-panel { left: 8px; right: 8px; width: auto; bottom: calc(72px + env(safe-area-inset-bottom)); } }
         
         /* 进度条样式 */
@@ -993,9 +996,22 @@
                 `<span class="ip-tag">${sysName}</span>` +
                 `<span class="ip-tag">${a.side}</span>` +
                 `<span class="ip-tag">${a.type}</span>` +
-                `<span class="ip-tag">${a.region}</span>`;
-            document.getElementById('ip-note').textContent = fam ? fam.note :
-                `该结构属于${sysName}，位于${a.region}，类型为${a.type}。旋转模型可继续观察它的形态与毗邻关系。`;
+                `<span class="ip-tag">${a.region}</span>` +
+                (fam && fam.name && fam.name !== cn ? `<span class="ip-tag">所属：${fam.name}</span>` : '');
+            if (fam) {
+                const rows = [
+                    ['位置与形态', fam.location],
+                    ['起止点', fam.attachments],
+                    ['神经支配', fam.innervation],
+                    ['功能', fam.action],
+                    ['临床要点', fam.clinical]
+                ].filter(r => r[1]);
+                document.getElementById('ip-note').innerHTML = rows
+                    .map(([k, v]) => `<div class="ip-row"><b>${k}</b>${v}</div>`).join('');
+            } else {
+                document.getElementById('ip-note').innerHTML =
+                    `<div class="ip-row"><b>结构信息</b>该结构属于${sysName}，位于${a.region}，类型为${a.type}。旋转模型可继续观察它的形态与毗邻关系。</div>`;
+            }
             document.getElementById('info-panel').classList.add('on');
         }
 
