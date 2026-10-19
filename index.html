@@ -464,7 +464,19 @@
                             progressBar.style.width = p + '%';
                             progressText.textContent = '正在载入骨骼系统: ' + p + '%';
                         }
-                    }, err => { console.error('骨骼 GLB 载入失败', err); resolve(); });
+                    }, err => {
+                        console.error('骨骼 GLB 载入失败，回退到 OBJ', err);
+                        this._skeletalPromise = null;
+                        const models = AnatomyData['skeletal'] || [];
+                        (async () => {
+                            for (let i = 0; i < models.length; i += 5) {
+                                await Promise.all(models.slice(i, i + 5).map(m => this._loadModel('skeletal', m)));
+                            }
+                            progressContainer.style.display = 'none';
+                            progressText.style.display = 'none';
+                            resolve();
+                        })();
+                    });
                 });
                 return this._skeletalPromise;
             }
