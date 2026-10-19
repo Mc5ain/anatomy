@@ -953,14 +953,16 @@
                 layerSystem.focusOnModel(m.id, currentSystem);
             }
         }
-        let AnatomyNotes = [];
+        let AnatomyNotes = [], AnatomyTypeNotes = {};
         async function loadNotes() {
             try {
                 const res = await fetch('data/anatomy_notes.json');
-                AnatomyNotes = (await res.json()).families || [];
+                const data = await res.json();
+                AnatomyNotes = data.families || [];
+                AnatomyTypeNotes = data.typeNotes || {};
             } catch (e) { console.warn('解析数据加载失败', e); }
         }
-        function analyzeName(cn, en) {
+        function analyzeName(cn, en, system) {
             const side = /左/.test(cn) ? '左侧' : (/右/.test(cn) ? '右侧' : '正中/双侧');
             let type = '结构';
             if (/肌/.test(cn) || /muscle/i.test(en)) type = '肌';
@@ -970,6 +972,7 @@
             else if (/静脉/.test(cn) || /vein/i.test(en)) type = '静脉';
             else if (/神经/.test(cn) || /nerve/i.test(en)) type = '神经';
             else if (/骨|软骨/.test(cn) || /bone|fossa|tubercle|condyle|process/i.test(en)) type = '骨';
+            if (type === '结构' && ['digestive','respiratory','urinary','reproductive','endocrine'].indexOf(system) >= 0) type = '器官';
             const regions = [
                 ['头面部', /头|颅|面|颌|眼|耳|鼻|口|牙/],
                 ['颈部', /颈/],
@@ -987,7 +990,7 @@
             const raw = data.name || '';
             const parts = raw.includes(' | ') ? raw.split(' | ') : [raw, ''];
             const cn = parts[0], en = parts[1] || '';
-            const a = analyzeName(cn, en);
+            const a = analyzeName(cn, en, data.system);
             const fam = AnatomyNotes.find(f => f.match.some(k => cn.includes(k)));
             const sysName = (SystemConfig[data.system] || {}).name || '';
             document.getElementById('ip-name').textContent = cn;
@@ -1009,8 +1012,11 @@
                 document.getElementById('ip-note').innerHTML = rows
                     .map(([k, v]) => `<div class="ip-row"><b>${k}</b>${v}</div>`).join('');
             } else {
-                document.getElementById('ip-note').innerHTML =
-                    `<div class="ip-row"><b>结构信息</b>该结构属于${sysName}，位于${a.region}，类型为${a.type}。旋转模型可继续观察它的形态与毗邻关系。</div>`;
+                const tn = AnatomyTypeNotes[a.type];
+                document.getElementById('ip-note').innerHTML = tn
+                    ? `<div class="ip-row"><b>结构信息</b>该结构属于${sysName}，位于${a.region}，类型为${a.type}。</div>` +
+                      `<div class="ip-row"><b>${a.type} · 通用要点</b>${tn}</div>`
+                    : `<div class="ip-row"><b>结构信息</b>该结构属于${sysName}，位于${a.region}，类型为${a.type}。旋转模型可继续观察它的形态与毗邻关系。</div>`;
             }
             document.getElementById('info-panel').classList.add('on');
         }
