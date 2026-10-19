@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>人体解剖学 3D 图谱 - BodyParts3D</title>
     <link rel="shortcut icon" href="favicon.svg" type="image/x-icon">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="js/vendor/three.min.js"></script>
+    <script src="js/vendor/OBJLoader.js"></script>
+    <script src="js/vendor/OrbitControls.js"></script>
     <style>
         :root { --bg-dark: #0a0a0f; --panel-bg: rgba(20, 20, 25, 0.85); --accent: #3b82f6; --text-main: #e4e4e7; --text-dim: #71717a; }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -266,6 +266,7 @@
         <div class="sidebar-header">
             <h1 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">🫀 人体解剖学图谱</h1>
             <p style="font-size: 11px; color: #71717a; margin-bottom: 12px;">BodyParts3D ISA分类 · 2234个模型</p>
+            <p style="font-size: 10px; color: #52525b; margin: -8px 0 10px;">模型数据 CC BY-SA 2.1 JP · 改造自 jixiangying/anatomy</p>
             <div class="system-tabs" id="system-tabs"></div>
             <input type="text" class="search-box" id="search-box" placeholder="搜索模型...">
         </div>
@@ -276,6 +277,10 @@
         <div class="panel-box">
             <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">🔍 图层控制</div>
             <div id="layer-controls"></div>
+            <div style="margin-top:14px;border-top:1px solid #27272a;padding-top:12px;">
+                <button id="quiz-btn" onclick="toggleQuiz()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3f3f46;background:#18181b;color:#e4e4e7;font-size:13px;cursor:pointer;">🧠 测验模式：关</button>
+                <div style="font-size:10px;color:#71717a;margin-top:6px;line-height:1.5;">打开后悬停只显示「？」，点一下才揭晓名称。</div>
+            </div>
         </div>
     </div>
     
@@ -340,7 +345,7 @@
             integumentary: { name: '皮肤系统', nameEn: 'Integumentary', color: 0xF4A460 }
         };
         const SystemOrder = Object.keys(SystemConfig);
-        let AnatomyData = {}, currentSystem = 'skeletal';
+        let AnatomyData = {}, currentSystem = 'skeletal', quizMode = false;
         let scene, camera, renderer, controls, layerSystem, raycaster, mouse, tooltip;
 
         class LayerControlSystem {
@@ -788,7 +793,20 @@
             }
             
             tooltip.style.whiteSpace = 'pre-line';
-            tooltip.innerHTML = `<div style="color:#fbbf24;font-family:monospace;font-weight:bold;font-size:11px;">${res.id}</div><div style="font-weight:bold;">${cn}</div><div style="font-size:11px;color:#aaa;">${en}</div>`;
+            if (quizMode) {
+                tooltip.innerHTML = `<div style="font-size:22px;font-weight:bold;color:#fbbf24;">？</div><div style="font-size:11px;color:#a1a1aa;">点一下揭晓名称</div>`;
+            } else {
+                tooltip.innerHTML = `<div style="color:#fbbf24;font-family:monospace;font-weight:bold;font-size:11px;">${res.id}</div><div style="font-weight:bold;">${cn}</div><div style="font-size:11px;color:#aaa;">${en}</div>`;
+            }
+        }
+
+        function toggleQuiz() {
+            quizMode = !quizMode;
+            const b = document.getElementById('quiz-btn');
+            b.textContent = '🧠 测验模式：' + (quizMode ? '开' : '关');
+            b.style.background = quizMode ? '#7c2d12' : '#18181b';
+            b.style.borderColor = quizMode ? '#9a3412' : '#3f3f46';
+            tooltip.style.display = 'none';
         }
 
         function switchSystem(s, preserveHighlight = false) { 
