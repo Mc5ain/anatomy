@@ -934,6 +934,7 @@
         }
 
         function selectModel(m) { 
+            showInfo({system: currentSystem, id: m.id, name: m.name});
             document.querySelectorAll('.model-item').forEach(i => i.classList.toggle('active', i.dataset.id === m.id)); 
             // 如果图层未开启，先开启并同步UI
             if (!layerSystem.layerVisibility[currentSystem]) {
@@ -1084,6 +1085,7 @@
         
         // 选择全局搜索结果中的模型
         function selectGlobalModel(m, system) {
+            showInfo({system: system, id: m.id, name: m.name});
             // 1. 如果图层未开启，先开启它
             if (!layerSystem.layerVisibility[system]) {
                 // 更新图层控制UI
