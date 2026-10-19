@@ -953,13 +953,14 @@
                 layerSystem.focusOnModel(m.id, currentSystem);
             }
         }
-        let AnatomyNotes = [], AnatomyTypeNotes = {};
+        let AnatomyNotes = [], AnatomyTypeNotes = {}, AnatomyRegionNotes = {};
         async function loadNotes() {
             try {
                 const res = await fetch('data/anatomy_notes.json');
                 const data = await res.json();
                 AnatomyNotes = data.families || [];
                 AnatomyTypeNotes = data.typeNotes || {};
+                AnatomyRegionNotes = data.regionNotes || {};
             } catch (e) { console.warn('解析数据加载失败', e); }
         }
         function analyzeName(cn, en, system) {
@@ -1013,10 +1014,12 @@
                     .map(([k, v]) => `<div class="ip-row"><b>${k}</b>${v}</div>`).join('');
             } else {
                 const tn = AnatomyTypeNotes[a.type];
-                document.getElementById('ip-note').innerHTML = tn
-                    ? `<div class="ip-row"><b>结构信息</b>该结构属于${sysName}，位于${a.region}，类型为${a.type}。</div>` +
-                      `<div class="ip-row"><b>${a.type} · 通用要点</b>${tn}</div>`
-                    : `<div class="ip-row"><b>结构信息</b>该结构属于${sysName}，位于${a.region}，类型为${a.type}。旋转模型可继续观察它的形态与毗邻关系。</div>`;
+                const rn = AnatomyRegionNotes[a.type + '|' + a.region];
+                let html = `<div class="ip-row"><b>结构信息</b>该结构属于${sysName}，位于${a.region}，类型为${a.type}。</div>`;
+                if (rn) html += `<div class="ip-row"><b>${a.region}的${a.type} · 系统要点</b>${rn}</div>`;
+                if (tn) html += `<div class="ip-row"><b>${a.type} · 通用要点</b>${tn}</div>`;
+                if (!rn && !tn) html += `<div class="ip-row"><b>观察建议</b>旋转模型可继续观察它的形态与毗邻关系。</div>`;
+                document.getElementById('ip-note').innerHTML = html;
             }
             document.getElementById('info-panel').classList.add('on');
         }
