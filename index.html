@@ -283,7 +283,7 @@
         <div class="panel-box">
             <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">🔍 图层控制</div>
             <div id="layer-controls"></div>
-            <div style="font-size:10px;color:#71717a;margin-top:8px;line-height:1.5;">骨骼默认已加载；其他系统点击后才下载（肌肉约 169 MB）。</div>
+            <div style="font-size:10px;color:#71717a;margin-top:8px;line-height:1.5;">骨骼默认已加载；其他系统点击后按需下载（每个 0.1–5 MB）。</div>
             <div style="margin-top:14px;border-top:1px solid #27272a;padding-top:12px;">
                 <button id="quiz-btn" onclick="toggleQuiz()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3f3f46;background:#18181b;color:#e4e4e7;font-size:13px;cursor:pointer;">🧠 测验模式：关</button>
                 <div style="font-size:10px;color:#71717a;margin-top:6px;line-height:1.5;">打开后悬停只显示「？」，点一下才揭晓名称。</div>
@@ -378,8 +378,8 @@
             }
             async loadSystem(system) {
                 if (!AnatomyData[system]) return;
-                // 骨骼已合并为单个 Draco 压缩 GLB（1 MB），一次请求加载完
-                if (system === 'skeletal') return this._loadSkeletalGLB();
+                // 每个系统都已合并为单个 Draco 压缩 GLB，一次请求加载完
+                return this._loadSystemGLB(system);
                 const models = AnatomyData[system];
                 const progressBar = document.getElementById('progress-bar');
                 const progressContainer = document.getElementById('global-progress');
@@ -417,41 +417,43 @@
                     }
                 }, 1000);
             }
-            _loadSkeletalGLB() {
-                if (this._skeletalPromise) return this._skeletalPromise;
+            _loadSystemGLB(system) {
+                this._glbPromises = this._glbPromises || {};
+                if (this._glbPromises[system]) return this._glbPromises[system];
                 const progressBar = document.getElementById('progress-bar');
                 const progressContainer = document.getElementById('global-progress');
                 const progressText = document.getElementById('progress-text');
                 progressContainer.style.display = 'block';
                 progressText.style.display = 'block';
-                progressText.textContent = '正在载入骨骼系统（压缩包约 1.4 MB）…';
+                progressText.textContent = '正在载入' + SystemConfig[system].name + '…';
 
-                this._skeletalPromise = new Promise(resolve => {
+                this._glbPromises[system] = new Promise(resolve => {
                     const draco = new THREE.DRACOLoader();
                     draco.setDecoderPath('js/vendor/draco/');
                     const loader = new THREE.GLTFLoader();
                     loader.setDRACOLoader(draco);
-                    loader.load('skeletal.glb', gltf => {
+                    loader.load('models/' + system + '.glb', gltf => {
                         const root = gltf.scene;
                         root.scale.set(0.1, 0.1, 0.1);
                         root.rotation.x = -Math.PI / 2;
                         const nameById = {};
-                        (AnatomyData['skeletal'] || []).forEach(m => { nameById[m.id] = m.name; });
+                        (AnatomyData[system] || []).forEach(m => { nameById[m.id] = m.name; });
                         let count = 0;
                         root.traverse(c => {
                             if (!c.isMesh) return;
                             const id = c.name;
-                            const material = this.materials['skeletal'].clone();
+                            const material = this.materials[system].clone();
                             c.material = material;
-                            c.userData = {system: 'skeletal', id, name: nameById[id] || '', baseMaterial: material};
-                            c.visible = !!this.layerVisibility['skeletal'];
-                            this.loadedModels['skeletal'].set(id, c);
+                            c.userData = {system: system, id, name: nameById[id] || '', baseMaterial: material};
+                            c.visible = !!this.layerVisibility[system];
+                            this.loadedModels[system].set(id, c);
                             count++;
                         });
                         this.scene.add(root);
-                        this._skeletalRoot = root;
+                        this._glbRoots = this._glbRoots || {};
+                        this._glbRoots[system] = root;
                         progressBar.style.width = '100%';
-                        progressText.textContent = '骨骼系统载入完成（' + count + ' 个模型）';
+                        progressText.textContent = SystemConfig[system].name + '载入完成（' + count + ' 个模型）';
                         setTimeout(() => {
                             progressContainer.style.display = 'none';
                             progressText.style.display = 'none';
@@ -462,15 +464,15 @@
                         if (xhr.total) {
                             const p = Math.round(xhr.loaded / xhr.total * 100);
                             progressBar.style.width = p + '%';
-                            progressText.textContent = '正在载入骨骼系统: ' + p + '%';
+                            progressText.textContent = '正在载入' + SystemConfig[system].name + ': ' + p + '%';
                         }
                     }, err => {
-                        console.error('骨骼 GLB 载入失败，回退到 OBJ', err);
-                        this._skeletalPromise = null;
-                        const models = AnatomyData['skeletal'] || [];
+                        console.error(SystemConfig[system].name + ' GLB 载入失败，回退到 OBJ', err);
+                        delete this._glbPromises[system];
+                        const models = AnatomyData[system] || [];
                         (async () => {
                             for (let i = 0; i < models.length; i += 5) {
-                                await Promise.all(models.slice(i, i + 5).map(m => this._loadModel('skeletal', m)));
+                                await Promise.all(models.slice(i, i + 5).map(m => this._loadModel(system, m)));
                             }
                             progressContainer.style.display = 'none';
                             progressText.style.display = 'none';
@@ -478,7 +480,7 @@
                         })();
                     });
                 });
-                return this._skeletalPromise;
+                return this._glbPromises[system];
             }
             _loadModel(system, model) {
                 if (this.loadedModels[system].has(model.id)) return Promise.resolve();
