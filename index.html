@@ -70,6 +70,24 @@
         #info-panel .ip-row { margin: 7px 0; }
         #info-panel .ip-row b { display: block; color: #a1a1aa; font-size: 11px; font-weight: 600; margin-bottom: 1px; }
         @media (max-width: 768px) { #info-panel { left: 8px; right: 8px; width: auto; bottom: calc(72px + env(safe-area-inset-bottom)); } }
+        #ref-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: none;
+            z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+        #ref-modal.on { display: flex; }
+        .ref-box { background: #111114; border: 1px solid #3f3f46; border-radius: 14px;
+            width: min(760px, 100%); max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; }
+        .ref-head { display: flex; gap: 10px; align-items: center; padding: 14px 16px; border-bottom: 1px solid #27272a; }
+        .ref-head b { font-size: 15px; white-space: nowrap; color: #e4e4e7; }
+        .ref-head input { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid #3f3f46;
+            background: #18181b; color: #e4e4e7; font-size: 13px; }
+        .ref-head span { cursor: pointer; color: #a1a1aa; font-size: 20px; }
+        #ref-body { overflow-y: auto; padding: 14px 16px; }
+        .ref-sec h4 { margin: 0 0 8px; font-size: 13px; color: #fbbf24; }
+        .ref-item { border: 1px solid #27272a; border-radius: 10px; padding: 10px 12px;
+            margin-bottom: 8px; background: #18181b; }
+        .ref-item .n { font-weight: 700; font-size: 14px; color: #e4e4e7; }
+        .ref-item .en { font-size: 11px; color: #71717a; margin-left: 6px; }
+        .ref-item p { margin: 6px 0 0; font-size: 12.5px; color: #d4d4d8; line-height: 1.6; }
+        .ref-item p b { color: #a1a1aa; }
         
         /* 进度条样式 */
         .global-progress { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: rgba(59, 130, 246, 0.1); z-index: 2000; display: none; overflow: hidden; }
@@ -286,6 +304,17 @@
         <div class="ip-meta" id="ip-meta"></div>
         <div class="ip-note" id="ip-note"></div>
     </div>
+
+    <div id="ref-modal">
+        <div class="ref-box">
+            <div class="ref-head">
+                <b>📖 器官速查</b>
+                <input id="ref-search" placeholder="搜器官名或功能，如 子宫、滤过、血糖…">
+                <span onclick="document.getElementById('ref-modal').classList.remove('on')">×</span>
+            </div>
+            <div id="ref-body"></div>
+        </div>
+    </div>
     
     <!-- 全局加载进度 -->
     <div id="global-progress" class="global-progress"><div id="progress-bar" class="progress-bar"></div></div>
@@ -310,6 +339,7 @@
             <div style="margin-top:14px;border-top:1px solid #27272a;padding-top:12px;">
                 <button id="quiz-btn" onclick="toggleQuiz()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3f3f46;background:#18181b;color:#e4e4e7;font-size:13px;cursor:pointer;">🧠 测验模式：关</button>
                 <div style="font-size:10px;color:#71717a;margin-top:6px;line-height:1.5;">打开后悬停只显示「？」，点一下才揭晓名称。</div>
+                <button onclick="openRef()" style="width:100%;margin-top:10px;padding:8px;border-radius:6px;border:1px solid #3f3f46;background:#18181b;color:#e4e4e7;font-size:13px;cursor:pointer;">📖 器官速查</button>
             </div>
         </div>
     </div>
@@ -648,6 +678,8 @@
                 return; 
             }
             await loadNotes();
+            await loadOrganRef();
+            document.getElementById('ref-search').addEventListener('input', e => renderRef(e.target.value));
             
             initUI(); init3D(); setupInteraction(); 
             // 默认只加载骨骼（压缩后 1.4 MB）；其他系统点击图层时再加载
@@ -962,6 +994,42 @@
                 AnatomyTypeNotes = data.typeNotes || {};
                 AnatomyRegionNotes = data.regionNotes || {};
             } catch (e) { console.warn('解析数据加载失败', e); }
+        }
+        let OrganRef = [];
+        async function loadOrganRef() {
+            try {
+                const res = await fetch('data/organ_reference.json');
+                OrganRef = (await res.json()).sections || [];
+                renderRef('');
+            } catch (e) { console.warn('器官速查加载失败', e); }
+        }
+        function openRef() {
+            document.getElementById('ref-modal').classList.add('on');
+            const input = document.getElementById('ref-search');
+            input.value = '';
+            renderRef('');
+            input.focus();
+        }
+        function renderRef(query) {
+            const q = (query || '').trim().toLowerCase();
+            const body = document.getElementById('ref-body');
+            if (!body) return;
+            let html = '';
+            OrganRef.forEach(sec => {
+                const items = (sec.organs || []).filter(o =>
+                    !q || (o.name + o.en + o.location + o.function + o.clinical).toLowerCase().includes(q));
+                if (!items.length) return;
+                html += `<div class="ref-sec"><h4>${sec.name}（${items.length}）</h4>`;
+                items.forEach(o => {
+                    html += `<div class="ref-item"><div><span class="n">${o.name}</span>` +
+                        `<span class="en">${o.en || ''}</span></div>` +
+                        `<p><b>位置</b> ${o.location}</p>` +
+                        `<p><b>功能</b> ${o.function}</p>` +
+                        `<p><b>临床</b> ${o.clinical}</p></div>`;
+                });
+                html += '</div>';
+            });
+            body.innerHTML = html || '<p style="color:#a1a1aa">没有找到匹配的器官，换个关键词试试。</p>';
         }
         function analyzeName(cn, en, system) {
             const side = /左/.test(cn) ? '左侧' : (/右/.test(cn) ? '右侧' : '正中/双侧');
