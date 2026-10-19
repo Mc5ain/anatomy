@@ -281,6 +281,7 @@
         <div class="panel-box">
             <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">🔍 图层控制</div>
             <div id="layer-controls"></div>
+            <div style="font-size:10px;color:#71717a;margin-top:8px;line-height:1.5;">骨骼默认已加载；其他系统点击后才下载（肌肉约 169 MB）。</div>
             <div style="margin-top:14px;border-top:1px solid #27272a;padding-top:12px;">
                 <button id="quiz-btn" onclick="toggleQuiz()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3f3f46;background:#18181b;color:#e4e4e7;font-size:13px;cursor:pointer;">🧠 测验模式：关</button>
                 <div style="font-size:10px;color:#71717a;margin-top:6px;line-height:1.5;">打开后悬停只显示「？」，点一下才揭晓名称。</div>
@@ -356,7 +357,8 @@
             constructor(scene, camera, renderer, controls) {
                 this.scene = scene; this.camera = camera; this.renderer = renderer; this.controls = controls;
                 this.loadedModels = {}; SystemOrder.forEach(s => this.loadedModels[s] = new Map());
-                this.layerVisibility = {}; SystemOrder.forEach(s => this.layerVisibility[s] = s === 'skeletal' || s === 'muscular');
+                // 首屏只加载骨骼；肌肉等其他系统点击后再按需加载
+                this.layerVisibility = {}; SystemOrder.forEach(s => this.layerVisibility[s] = s === 'skeletal');
                 this.materials = this._createMaterials();
                 this.highlightedModel = null; this.originalMaterials = new Map();
             }
@@ -555,9 +557,8 @@
             }
             
             initUI(); init3D(); setupInteraction(); 
-            // 默认加载骨骼和肌肉系统
-            layerSystem.loadSystem('skeletal'); 
-            layerSystem.loadSystem('muscular');
+            // 默认只加载骨骼（40 MB）；肌肉 169 MB，点图层时再加载
+            layerSystem.loadSystem('skeletal');
             
             updateModelList();
             setTimeout(() => { 
@@ -577,7 +578,7 @@
             const layers = document.getElementById('layer-controls');
             SystemOrder.forEach(s => { 
                 const cfg = SystemConfig[s], c = '#' + cfg.color.toString(16).padStart(6,'0'); const d = document.createElement('div'); 
-                const isDefaultActive = s==='skeletal' || s==='muscular';
+                const isDefaultActive = s==='skeletal';
                 d.className = 'layer-item' + (isDefaultActive?' active':''); d.dataset.system = s; 
                 d.innerHTML = `<div style="display:flex;align-items:center;flex:1;min-width:0;"><div class="layer-color" style="background:${c}"></div><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><div style="font-size:13px;font-weight:500">${cfg.name} <span style="font-size:11px; font-weight:400; opacity:0.7;">${cfg.nameEn}</span></div><div style="font-size:10px;color:#71717a">${cfg.count} models</div></div></div><div class="layer-checkbox">${isDefaultActive?'✓':''}</div>`; 
                 d.onclick = () => globalToggleLayer(s); layers.appendChild(d); 
@@ -615,7 +616,7 @@
             SystemOrder.forEach(s => { 
                 const cfg = SystemConfig[s], c = '#' + cfg.color.toString(16).padStart(6,'0'); 
                 const d = document.createElement('div'); 
-                const isDefaultActiveMobile = s==='skeletal' || s==='muscular';
+                const isDefaultActiveMobile = s==='skeletal';
                 d.className = 'layer-item' + (isDefaultActiveMobile?' active':''); 
                 d.dataset.system = s; 
                 d.innerHTML = `<div style="display:flex;align-items:center;flex:1;min-width:0;"><div class="layer-color" style="background:${c}"></div><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><div style="font-size:14px;font-weight:500">${cfg.name} <span style="font-size:12px; font-weight:400; opacity:0.7;">${cfg.nameEn}</span></div><div style="font-size:11px;color:#71717a">${cfg.count} models</div></div></div><div class="layer-checkbox">${isDefaultActiveMobile?'✓':''}</div>`; 
