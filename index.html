@@ -335,7 +335,7 @@
         <div class="panel-box">
             <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">🔍 图层控制</div>
             <div id="layer-controls"></div>
-            <div style="font-size:10px;color:#71717a;margin-top:8px;line-height:1.5;">骨骼默认已加载；其他系统点击后按需下载（每个 0.1–5 MB）。</div>
+            <div style="font-size:10px;color:#71717a;margin-top:8px;line-height:1.5;">骨骼默认已加载；其他系统点击后按需下载（每个 0.1–5 MB）。<br>皮肤已设为半透明，点击时优先选中左侧当前浏览的系统。</div>
             <div style="margin-top:14px;border-top:1px solid #27272a;padding-top:12px;">
                 <button id="quiz-btn" onclick="toggleQuiz()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3f3f46;background:#18181b;color:#e4e4e7;font-size:13px;cursor:pointer;">🧠 测验模式：关</button>
                 <div style="font-size:10px;color:#71717a;margin-top:6px;line-height:1.5;">打开后悬停只显示「？」，点一下才揭晓名称。</div>
@@ -427,6 +427,11 @@
                     integumentary: {c:0xF4A460,r:0.6,m:0}
                 };
                 for (const [s,c] of Object.entries(cfg)) mats[s] = new THREE.MeshStandardMaterial({color:c.c,roughness:c.r,metalness:c.m});
+                // 皮肤半透明，避免完全遮住内部结构
+                mats.integumentary.transparent = true;
+                mats.integumentary.opacity = 0.18;
+                mats.integumentary.depthWrite = false;
+                mats.integumentary.side = THREE.DoubleSide;
                 return mats;
             }
             async loadSystem(system) {
@@ -659,7 +664,22 @@
                 raycaster.setFromCamera(mouse, this.camera); const visibleObjects = [];
                 SystemOrder.forEach(s => { if (this.layerVisibility[s]) this.loadedModels[s].forEach(obj => { if (obj.visible) visibleObjects.push(obj); }); });
                 const intersects = raycaster.intersectObjects(visibleObjects, true);
-                if (intersects.length > 0) { let t = intersects[0].object; while (t.parent && !t.userData.id) t = t.parent; return t.userData; }
+                if (intersects.length > 0) {
+                    const infoOf = (obj) => { let t = obj; while (t.parent && !t.userData.id) t = t.parent; return t.userData; };
+                    // 1) 优先命中左侧当前浏览的系统（解决肌肉/皮肤遮挡骨与器官）
+                    for (const hit of intersects) {
+                        const d = infoOf(hit.object);
+                        if (d && d.id && d.system === currentSystem) return d;
+                    }
+                    // 2) 没有当前系统的命中时，穿透皮肤
+                    for (const hit of intersects) {
+                        const d = infoOf(hit.object);
+                        if (d && d.id && d.system !== 'integumentary') return d;
+                    }
+                    // 3) 只剩皮肤，才返回皮肤
+                    const d0 = infoOf(intersects[0].object);
+                    return d0 && d0.id ? d0 : null;
+                }
                 return null;
             }
         }
