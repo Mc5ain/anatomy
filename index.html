@@ -69,7 +69,23 @@
         #info-panel .ip-note { color: #d4d4d8; font-size: 12.5px; }
         #info-panel .ip-row { margin: 7px 0; }
         #info-panel .ip-row b { display: block; color: #a1a1aa; font-size: 11px; font-weight: 600; margin-bottom: 1px; }
+        #info-panel .ip-actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #3f3f46; }
+        #info-panel .ip-action { flex: 1; padding: 8px 10px; border: 1px solid #3f3f46; border-radius: 8px;
+            background: #18181b; color: #e4e4e7; font-size: 12px; cursor: pointer; }
+        #info-panel .ip-action:hover { border-color: #3b82f6; }
+        #info-panel .ip-action.active { border-color: #3b82f6; background: #172554; color: #bfdbfe; }
+        #isolation-exit { position: fixed; left: 50%; top: 14px; z-index: 70; transform: translateX(-50%);
+            display: none; align-items: center; gap: 10px; padding: 8px 10px 8px 14px;
+            border: 1px solid #3b82f6; border-radius: 999px; background: rgba(15,23,42,.94);
+            color: #dbeafe; font-size: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+        #isolation-exit.on { display: flex; }
+        #isolation-exit button { padding: 6px 10px; border: 0; border-radius: 999px;
+            background: #3b82f6; color: #fff; font-size: 12px; cursor: pointer; }
         @media (max-width: 768px) { #info-panel { left: 8px; right: 8px; width: auto; bottom: calc(72px + env(safe-area-inset-bottom)); } }
+        @media (max-width: 768px) {
+            #isolation-exit { top: 8px; max-width: calc(100vw - 16px); white-space: nowrap; }
+            #isolation-exit span { overflow: hidden; text-overflow: ellipsis; }
+        }
         #ref-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: none;
             z-index: 200; align-items: center; justify-content: center; padding: 20px; }
         #ref-modal.on { display: flex; }
@@ -303,6 +319,14 @@
         <div class="ip-en" id="ip-en"></div>
         <div class="ip-meta" id="ip-meta"></div>
         <div class="ip-note" id="ip-note"></div>
+        <div class="ip-actions">
+            <button class="ip-action" id="isolate-btn" onclick="toggleSelectedIsolation()">只看这个部位</button>
+        </div>
+    </div>
+
+    <div id="isolation-exit">
+        <span>正在单独查看：<b id="isolation-name"></b></span>
+        <button onclick="restoreIsolation()">恢复全身</button>
     </div>
 
     <div id="ref-modal">
@@ -335,7 +359,7 @@
         <div class="panel-box">
             <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">🔍 图层控制</div>
             <div id="layer-controls"></div>
-            <div style="font-size:10px;color:#71717a;margin-top:8px;line-height:1.5;">骨骼默认已加载；其他系统点击后按需下载（每个 0.1–5 MB）。<br>皮肤已设为半透明，点击时优先选中左侧当前浏览的系统。</div>
+            <div style="font-size:10px;color:#71717a;margin-top:8px;line-height:1.5;">骨骼默认已加载；其他系统点击后按需下载（每个 0.1–5 MB）。<br>皮肤已设为半透明，点击时优先选中左侧当前浏览的系统。<br>选中一个部位后，可点底部“只看这个部位”单独研究。</div>
             <div style="margin-top:14px;border-top:1px solid #27272a;padding-top:12px;">
                 <button id="quiz-btn" onclick="toggleQuiz()" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3f3f46;background:#18181b;color:#e4e4e7;font-size:13px;cursor:pointer;">🧠 测验模式：关</button>
                 <div style="font-size:10px;color:#71717a;margin-top:6px;line-height:1.5;">打开后悬停只显示「？」，点一下才揭晓名称。</div>
@@ -405,7 +429,7 @@
             integumentary: { name: '皮肤系统', nameEn: 'Integumentary', color: 0xF4A460 }
         };
         const SystemOrder = Object.keys(SystemConfig);
-        let AnatomyData = {}, currentSystem = 'skeletal', quizMode = false;
+        let AnatomyData = {}, currentSystem = 'skeletal', quizMode = false, selectedModelInfo = null;
         let scene, camera, renderer, controls, layerSystem, raycaster, mouse, tooltip;
 
         class LayerControlSystem {
@@ -416,6 +440,10 @@
                 this.layerVisibility = {}; SystemOrder.forEach(s => this.layerVisibility[s] = s === 'skeletal');
                 this.materials = this._createMaterials();
                 this.highlightedModel = null; this.originalMaterials = new Map();
+                this.isolateActive = false;
+                this.isolatedModelId = null;
+                this.isolatedSystem = null;
+                this.viewBeforeIsolation = null;
             }
             _createMaterials() {
                 const mats = {}, cfg = {
@@ -510,6 +538,7 @@
                         this.scene.add(root);
                         this._glbRoots = this._glbRoots || {};
                         this._glbRoots[system] = root;
+                        if (this.isolateActive) this._applyIsolation();
                         progressBar.style.width = '100%';
                         progressText.textContent = SystemConfig[system].name + '载入完成（' + count + ' 个模型）';
                         setTimeout(() => {
@@ -532,6 +561,7 @@
                             for (let i = 0; i < models.length; i += 5) {
                                 await Promise.all(models.slice(i, i + 5).map(m => this._loadModel(system, m)));
                             }
+                            if (this.isolateActive) this._applyIsolation();
                             progressContainer.style.display = 'none';
                             progressText.style.display = 'none';
                             resolve();
@@ -560,6 +590,7 @@
                 });
             }
             toggleLayer(system, visible) { 
+                if (this.isolateActive) this.restoreIsolation();
                 this.layerVisibility[system] = visible; 
                 // 强制遍历所有已加载的模型，设置visible
                 this.loadedModels[system].forEach(m => { 
@@ -577,6 +608,54 @@
                 }
                 return Promise.resolve();
             }
+            _setModelVisibility(model, visible) {
+                model.visible = visible;
+                model.traverse(child => { child.visible = visible; });
+            }
+            _applyIsolation() {
+                if (!this.isolateActive) return;
+                SystemOrder.forEach(system => {
+                    this.loadedModels[system].forEach((model, id) => {
+                        this._setModelVisibility(
+                            model,
+                            system === this.isolatedSystem && id === this.isolatedModelId
+                        );
+                    });
+                });
+            }
+            isolateModel(id, system) {
+                const model = this.loadedModels[system]?.get(id);
+                if (!model) {
+                    this.restoreIsolation();
+                    return this.toggleLayer(system, true).then(() => this.isolateModel(id, system));
+                }
+                this.isolateActive = true;
+                this.isolatedModelId = id;
+                this.isolatedSystem = system;
+                this._applyIsolation();
+                this.highlightModel(id, system);
+                updateIsolationUI();
+            }
+            restoreIsolation() {
+                if (!this.isolateActive) return;
+                this.isolateActive = false;
+                this.isolatedModelId = null;
+                this.isolatedSystem = null;
+                SystemOrder.forEach(system => {
+                    this.loadedModels[system].forEach(model => {
+                        this._setModelVisibility(model, !!this.layerVisibility[system]);
+                    });
+                });
+                this._updateAllModelMaterials();
+                if (this.viewBeforeIsolation) {
+                    this._animateCamera(
+                        this.viewBeforeIsolation.position,
+                        this.viewBeforeIsolation.target
+                    );
+                    this.viewBeforeIsolation = null;
+                }
+                updateIsolationUI();
+            }
             highlightModel(id, system) {
                 // 先清除之前的高亮状态（恢复所有模型）
                 this.clearHighlight();
@@ -587,6 +666,13 @@
                 this.highlightedModel = model;
                 this.highlightedModelId = id;
                 this.highlightedSystem = system;
+
+                if (this.isolateActive) {
+                    this.isolatedModelId = id;
+                    this.isolatedSystem = system;
+                    this._applyIsolation();
+                    updateIsolationUI();
+                }
                 
                 // 更新所有模型的材质状态
                 this._updateAllModelMaterials();
@@ -642,6 +728,20 @@
                 // 恢复所有材质
                 this._updateAllModelMaterials();
             }
+            _animateCamera(position, target) {
+                const startPos = this.camera.position.clone();
+                const startTarget = this.controls.target.clone();
+                let t = 0;
+                const animate = () => {
+                    t = Math.min(1, t + 0.06);
+                    const ease = t * (2 - t);
+                    this.camera.position.lerpVectors(startPos, position, ease);
+                    this.controls.target.lerpVectors(startTarget, target, ease);
+                    this.controls.update();
+                    if (t < 1) requestAnimationFrame(animate);
+                };
+                animate();
+            }
             focusOnModel(id, system) {
                 const model = this.loadedModels[system]?.get(id);
                 if (!model) { 
@@ -651,10 +751,22 @@
                     });
                     return; 
                 }
-                const box = new THREE.Box3().setFromObject(model), center = box.getCenter(new THREE.Vector3()), dist = Math.max(...box.getSize(new THREE.Vector3()).toArray()) * 5;
-                const endPos = new THREE.Vector3(center.x+dist, center.y+dist*0.5, center.z+dist), startPos = this.camera.position.clone();
-                let t = 0; const animate = () => { if (t >= 1) return; t += 0.05; this.camera.position.lerpVectors(startPos, endPos, t*(2-t)); this.controls.target.lerp(center, 0.1); this.controls.update(); requestAnimationFrame(animate); };
-                animate(); 
+                if (!this.isolateActive && !this.viewBeforeIsolation) {
+                    this.viewBeforeIsolation = {
+                        position: this.camera.position.clone(),
+                        target: this.controls.target.clone()
+                    };
+                }
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(0.01, size.x, size.y, size.z);
+                const halfFov = THREE.MathUtils.degToRad(this.camera.fov * 0.5);
+                const fitHeight = maxDim / (2 * Math.tan(halfFov));
+                const fitWidth = maxDim / (2 * Math.tan(halfFov) * this.camera.aspect);
+                const distance = Math.max(fitHeight, fitWidth) * 1.65;
+                const direction = new THREE.Vector3(1, 0.35, 1).normalize();
+                this._animateCamera(center.clone().addScaledVector(direction, distance), center);
                 // 只有图层可见时才高亮
                 if (this.layerVisibility[system]) {
                     this.highlightModel(id, system);
@@ -910,7 +1022,7 @@
                         }
                     } else {
                         // 点击空白处，清除高亮并隐藏悬浮窗
-                        layerSystem.clearHighlight();
+                        if (!layerSystem.isolateActive) layerSystem.clearHighlight();
                         document.querySelectorAll('.model-item').forEach(i => i.classList.remove('active'));
                         tooltip.style.display = 'none';
                     }
@@ -959,7 +1071,43 @@
             tooltip.style.display = 'none';
         }
 
+        function updateIsolationUI() {
+            const button = document.getElementById('isolate-btn');
+            const indicator = document.getElementById('isolation-exit');
+            if (!button || !indicator) return;
+            const active = !!(layerSystem && layerSystem.isolateActive);
+            const sameModel = active && selectedModelInfo &&
+                layerSystem.isolatedModelId === selectedModelInfo.id &&
+                layerSystem.isolatedSystem === selectedModelInfo.system;
+            button.textContent = sameModel ? '↩ 恢复全身' : '◎ 只看这个部位';
+            button.classList.toggle('active', sameModel);
+            indicator.classList.toggle('on', active);
+            if (active && selectedModelInfo) {
+                const name = (selectedModelInfo.name || '').split(' | ')[0];
+                document.getElementById('isolation-name').textContent = name;
+            }
+        }
+
+        function toggleSelectedIsolation() {
+            if (!selectedModelInfo || !layerSystem) return;
+            const sameModel = layerSystem.isolateActive &&
+                layerSystem.isolatedModelId === selectedModelInfo.id &&
+                layerSystem.isolatedSystem === selectedModelInfo.system;
+            if (sameModel) {
+                layerSystem.restoreIsolation();
+            } else {
+                layerSystem.isolateModel(selectedModelInfo.id, selectedModelInfo.system);
+            }
+        }
+
+        function restoreIsolation() {
+            if (layerSystem) layerSystem.restoreIsolation();
+        }
+
         function switchSystem(s, preserveHighlight = false) { 
+            if (layerSystem && layerSystem.isolateActive && !preserveHighlight) {
+                layerSystem.restoreIsolation();
+            }
             // 清除之前的高亮（除非指定保留）
             if (!preserveHighlight) {
                 layerSystem.clearHighlight();
@@ -1076,6 +1224,7 @@
             return { side, type, region };
         }
         function showInfo(data) {
+            selectedModelInfo = {system: data.system, id: data.id, name: data.name || ''};
             const raw = data.name || '';
             const parts = raw.includes(' | ') ? raw.split(' | ') : [raw, ''];
             const cn = parts[0], en = parts[1] || '';
@@ -1111,6 +1260,7 @@
                 document.getElementById('ip-note').innerHTML = html;
             }
             document.getElementById('info-panel').classList.add('on');
+            updateIsolationUI();
         }
 
         function selectModelByData(data) { 
